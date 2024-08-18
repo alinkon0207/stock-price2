@@ -1,31 +1,51 @@
 
-const http = require("https");
-const dotenv = require("dotenv");
+const WebSocket = require('ws');
+const dotenv = require('dotenv');
 
 
 dotenv.config();
 
 const API_KEY = process.env.API_KEY;
 
-const options = {
-	"method": "GET",
-	"hostname": "api.twelvedata.com",
-	"port": null,
-	"path": `/time_series?apikey=${API_KEY}&interval=1min&symbol=AAPL&type=stock&outputsize=1`
+
+const main = () => {
+    try {
+        let ws = new WebSocket(`wss://ws.twelvedata.com/v1/quotes/price?apikey=${API_KEY}`);
+
+        ws.onopen = (e) => {
+            console.log('[ws onopen]');
+            
+            let sendData = {
+                "action": "subscribe", 
+                "params": {
+                    "symbols": [{
+                        "symbol": "AAPL", 
+                        "exchange": "NASDAQ", 
+                        "price": true
+                    }], 
+                    "event": "price"
+                }
+            };
+            ws.send(JSON.stringify(sendData));
+        };
+
+        ws.onmessage = e => {
+            let transaction = JSON.parse(e.data);
+
+            console.log('[onmsg]', transaction);
+            if (transaction.event == 'price') {
+                const txTime = transaction.timestamp;
+                console.log(`  input_time: ${txTime}  price: ${transaction.price}`);
+            }
+        };
+
+        ws.onclose = function () {
+            console.log('[onclose]');
+        };
+    } catch (err) {
+        console.error(err);
+    }
 };
 
 
-const req = http.request(options, function (res) {
-	const prices = [];
-
-	res.on("data", function (chunk) {
-		const json_chunk = JSON.parse(chunk);
-        prices.push(json_chunk.values[0]);
-	});
-
-	res.on("end", function () {
-		console.log(prices);
-	});
-});
-
-req.end();
+main();
